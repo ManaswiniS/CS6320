@@ -1,5 +1,4 @@
 import nltk
-import urllib.request
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
@@ -13,17 +12,19 @@ nltk.download('punkt')
 nltk.download('wordnet')
 nltk.download('omw-1.4')
 
-# Data
-train_data = "train.txt"
-val_data = "val.txt"
+current_directory = os.path.dirname(os.path.abspath(__file__))
+
+# Define the file paths for train.txt and val.txt. Files have to be in the same directory as the script
+train_data = os.path.join(current_directory, "train.txt")
+val_data = os.path.join(current_directory, "val.txt")
 
 def preprocess(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         data = file.read()
     tokens = word_tokenize(data)
     data = [word.lower() for word in tokens if word.lower() not in stopwords.words('english')
-                      and word not in string.punctuation and word[0] not in string.punctuation and word.isalpha()]
-    lemmatizer = nltk.stem.WordNetLemmatizer()
+            and word not in string.punctuation and word[0] not in string.punctuation and word.isalpha()]
+    lemmatizer = WordNetLemmatizer()
     data = [lemmatizer.lemmatize(word) for word in data]
     return data
 
@@ -31,9 +32,6 @@ train_data = preprocess(train_data)
 val_data = preprocess(val_data)
 
 # Unigram
-from collections import defaultdict
-import math
-
 class UnigramLanguageModel:
     def __init__(self, data, unknown_words_method='k', k=0):
         self.data = data
@@ -133,8 +131,9 @@ unigram_train_no_smoothing.train()
 
 unigram_val_no_smoothing = UnigramLanguageModel(val_data)
 unigram_val_no_smoothing.train()
-print('Perplexity of Unigram on train data (No Smoothing):', unigram_train_no_smoothing.perplexity_Unigram())
-print('Perplexity of Unigram on validation data (No Smoothing):', unigram_val_no_smoothing.perplexity_Unigram())
+
+print('Train data: Perplexity of Unigram (No Smoothing):', unigram_train_no_smoothing.perplexity_Unigram())
+print('validation data: Perplexity of Unigram (No Smoothing):', unigram_val_no_smoothing.perplexity_Unigram())
 
 # Smoothed - Laplace smoothing
 unigram_train_laplace = UnigramLanguageModel(train_data, 'k', 1)
@@ -145,7 +144,7 @@ unigram_val_laplace.train()
 unigram_val_laplace.validate(train_data)  # Validate using the training data
 
 # print('Perplexity of Unigram using Laplace smoothing on train data:', unigram_train_laplace.perplexity_Unigram())
-print('Perplexity of Unigram using Laplace smoothing on validation data:', unigram_val_laplace.perplexity_Unigram())
+print('validation data: Perplexity of Unigram using Laplace smoothing:', unigram_val_laplace.perplexity_Unigram())
 
 # Smoothed - Add-k smoothing with k=0.5
 unigram_train_addk = UnigramLanguageModel(train_data, 'k', 0.5)
@@ -156,12 +155,12 @@ unigram_val_addk.train()
 unigram_val_addk.validate(train_data)  # Validate using the training data
 
 # print('Perplexity of Unigram using Add-k smoothing (k=0.5) on train data:', unigram_train_addk.perplexity_Unigram())
-print('Perplexity of Unigram using Add-k smoothing (k=0.5) on validation data:', unigram_val_addk.perplexity_Unigram())
+print('validation data: Perplexity of Unigram using Add-k smoothing (k=0.5)', unigram_val_addk.perplexity_Unigram())
 
 
 unigram_val_unknown = UnigramLanguageModel(val_data, 'unk', 1)
 unigram_val_unknown.train()
-print('Perplexity of Unigram after unknown word handling on validation data:',  unigram_val_unknown.perplexity_Unigram())
+print('validation data: Perplexity of Unigram after unknown word handling',  unigram_val_unknown.perplexity_Unigram())
 
 # # Initialize unigram models with different smoothing methods for training
 # unigram_train_no_smoothing = UnigramLanguageModel(train_data)
@@ -224,7 +223,7 @@ print('Perplexity of Unigram after unknown word handling on validation data:',  
 # Bigram
 from collections import Counter
 
-class Bigram:
+class BigramLanguageModel:
     def __init__(self, data, unknown_words_method='k', k=0):
         self.data = data
         self.words_count = 0
@@ -240,15 +239,28 @@ class Bigram:
         self.val_counts = defaultdict(int)
         self.val_bigram_counts = defaultdict(int)
 
-    def calc_counts(self, train_or_val='train'):
-        if train_or_val == 'train':
+    def calculate_word_counts_bigram(self, dataset_type='train'):
+        """
+    Calculate word and bigram counts for either training or validation data.
+
+    This function counts individual words and bigrams in the given data based on
+    the specified 'train_or_val' mode. It updates word counts, bigram counts, and
+    handles unknown words if applicable.
+
+    Args:
+        train_or_val (str, optional): The mode to determine whether to count
+            words and bigrams for training or validation data ('train' or 'val').
+            Defaults to 'train'.
+
+    """
+        if dataset_type == 'train':
             self.bigrams = list(zip(self.data, self.data[1:]))
             for word in self.data:
                 self.words_count += 1
                 self.counts[word] += 1
             for bigram in self.bigrams:
                 self.bigram_counts[bigram] += 1
-        elif train_or_val == 'val':
+        elif dataset_type == 'val':
             self.val_bigrams = list(zip(self.val_data, self.val_data[1:]))
             for word in self.val_data:
                 if word not in self.word_set:
@@ -263,20 +275,46 @@ class Bigram:
                     w2 = '<UNK>'
                 self.val_bigram_counts[(w1, w2)] += 1
 
-    def calc_probabilities(self):
+    def calculate_word_probabilities_bigram(self):
+        """
+    Calculate bigram probabilities based on word counts.
+
+    This function calculates bigram probabilities using the counts of bigrams
+    and the counts of their first words. It updates the bigram probabilities
+    dictionary.
+    """
         for word, count in self.bigram_counts.items():
             self.bigram_probs[word] = (count) / (self.counts[word[0]])
 
-    def recalc_probabilities_with_val(self):
+    def update_word_probabilities_with_val_bigram(self):
+        """
+    Update bigram probabilities with validation data.
+
+    This function updates bigram probabilities based on the counts of bigrams
+    from the validation data and the counts of their first words in the training
+    data. It applies the specified unknown word handling method (UNK or Add-k
+    smoothing) to account for unseen bigrams during validation.
+    """
         if self.unknown_words_method == 'unk':
             self.bigram_probs[('<UNK>', '<UNK>')] = self.bigram_counts[('<UNK>', '<UNK>')] / self.unknown_words_count
         elif self.unknown_words_method == 'k':
             for word, val_count in self.val_bigram_counts.items():
                 if word not in self.bigram_counts:
                     self.bigram_probs[word] = (val_count + self.k) / (
-                                self.counts[word[0]] + self.k * len(self.counts))
+                            self.counts[word[0]] + self.k * len(self.counts))
 
-    def perplexity(self):
+    def perplexity_bigram(self):
+        """
+        Calculate perplexity for a bigram language model on a test corpus.
+
+        The perplexity is computed using the following formula:
+        PP = exp((1/N) * Σ(-log P(wi|wi-1))) where N is the total number of tokens
+        in the test corpus and P(wi|wi-1) is the bigram probability of the word wi
+        given the previous word wi-1, based on the trained bigram model.
+
+        Returns:
+            float: The perplexity score for the bigram model on the test corpus.
+        """
         def entropy(dictvalues):
             totalentropy = 0
             for key, values in dictvalues.items():
@@ -289,37 +327,42 @@ class Bigram:
         return math.pow(2, entropy(self.bigram_probs))
 
     def train(self):
-        self.calc_counts()
+        self.calculate_word_counts_bigram()
         self.word_set = set(self.counts.keys())
-        self.calc_probabilities()
+        self.calculate_word_probabilities_bigram()
 
     def validate(self, val_data):
         self.val_data = val_data
-        self.calc_counts('val')
-        self.recalc_probabilities_with_val()
+        self.calculate_word_counts_bigram('val')
+        self.calculate_word_probabilities_bigram()
 
 # Bigram without smoothing
-bigram_val = Bigram(val_data)
-bigram_val.train()
+bigram_train_no_smoothing = BigramLanguageModel(train_data)
+bigram_train_no_smoothing.train()
 
-print('Perplexity of Bigram on validation data (No Smoothing):', bigram_val.perplexity())
+# Bigram without smoothing
+bigram_val_no_smoothing = BigramLanguageModel(val_data)
+bigram_val_no_smoothing.train()
+
+print('Train data : Perplexity of Bigram (No Smoothing):', bigram_train_no_smoothing.perplexity_bigram())
+print('validation data : Perplexity of Bigram (No Smoothing):', bigram_val_no_smoothing.perplexity_bigram())
 # Smoothed - Laplace smoothing for Bigram
-bigram_train = Bigram(train_data)
-bigram_train.train()
+bigram_train_laplase = BigramLanguageModel(train_data)
+bigram_train_laplase.train()
 
-bigram_val = Bigram(val_data, 'k', 1)
-bigram_val.train()
-bigram_val.validate(train_data)  # Validate using the training data
+bigram_val_laplase = BigramLanguageModel(val_data, 'k', 1)
+bigram_val_laplase.train()
+bigram_val_laplase.validate(train_data)  # Validate using the training data
 
-print('Perplexity of Bigram using Laplace smoothing on validation data:', bigram_val.perplexity())
+print('validation data: Perplexity of Bigram using Laplace smoothing:', bigram_val_laplase.perplexity_bigram())
 
 # Smoothed - Add-k smoothing with k=0.5 for Bigram
-bigram_val_addk = Bigram(val_data, 'k', 0.5)
+bigram_val_addk = BigramLanguageModel(val_data, 'k', 0.5)
 bigram_val_addk.train()
 bigram_val_addk.validate(train_data)  # Validate using the training data
 
-print('Perplexity of Bigram using Add-k smoothing (k=0.5) on validation data:', bigram_val_addk.perplexity())
+print('Perplexity of Bigram using Add-k smoothing (k=0.5) on validation data:', bigram_val_addk.perplexity_bigram())
 
-bigram_val_unknown = Bigram(val_data, 'unk', 1)
+bigram_val_unknown = BigramLanguageModel(val_data, 'unk', 1)
 bigram_val_unknown.train()
-print('Perplexity of Bigram after unknown word handling on validation data:',  bigram_val_unknown.perplexity())
+print('Perplexity of Bigram after unknown word handling on validation data:',  bigram_val_unknown.perplexity_bigram())
