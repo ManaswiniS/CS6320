@@ -1,0 +1,9 @@
+Train data: Perplexity of Unigram (No Smoothing): 15046.483144797754
+validation data: Perplexity of Unigram (No Smoothing): 2357.9126723875734
+validation data: Perplexity of Unigram using Laplace smoothing: 2344.235611806417
+validation data: Perplexity of Unigram using Add-k smoothing (k=0.5) 2344.0120156615512
+Train data : Perplexity of Bigram (No Smoothing): 20.622143928723915
+validation data : Perplexity of Bigram (No Smoothing): 5.176217832396266
+validation data: Perplexity of Bigram using Laplace smoothing: 33.27451628219569
+Perplexity of Bigram using Add-k smoothing (k=0.5) on validation data: 33.27451628219569
+Perplexity of Bigram after unknown word handling on validation data: 5.176217832396266
